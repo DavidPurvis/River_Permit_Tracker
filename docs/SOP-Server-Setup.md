@@ -81,49 +81,20 @@ Confirm it finishes without errors and that you get an alert if there are availa
 
 ---
 
-## Phase 2: Run the bot on a schedule
+## Phase 2: Run the bot
 
 Choose **one** of the two options below.
 
 ---
 
-### Option A: Cron (simplest)
+### Option A: Systemd service (recommended)
 
-1. Open root’s crontab:
+Long-running process that polls every 30 seconds (or set `POLL_INTERVAL_SECONDS` in `.env`). Logs to `lodore_bot.log` in the repo dir and to the journal. Restarts on failure and survives reboots.
 
-   ```bash
-   sudo crontab -e
-   ```
-
-2. Add this line (runs every 5 minutes and appends to a log file):
-
-   ```cron
-   */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py >> /var/log/lodore-bot.log 2>&1
-   ```
-
-3. Save and exit.  
-4. Ensure the log file can be created (first run will create it):
-
-   ```bash
-   sudo touch /var/log/lodore-bot.log
-   sudo chmod 644 /var/log/lodore-bot.log
-   ```
-
-5. After 5 minutes, confirm runs:
-
-   ```bash
-   tail -20 /var/log/lodore-bot.log
-   ```
-
----
-
-### Option B: Systemd timer
-
-1. Copy service and timer into systemd:
+1. Copy the service file:
 
    ```bash
    sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.service /etc/systemd/system/
-   sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.timer /etc/systemd/system/
    ```
 
 2. If the repo is **not** at `/opt/River_Permit_Tracker`, edit the service:
@@ -134,25 +105,48 @@ Choose **one** of the two options below.
 
    Update `WorkingDirectory` and the paths in `ExecStart` to match your install path.
 
-3. Reload systemd and enable the timer:
+3. Reload systemd and start the service:
 
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable lodore-permit-bot.timer
-   sudo systemctl start lodore-permit-bot.timer
+   sudo systemctl enable --now lodore-permit-bot.service
    ```
 
-4. Confirm the timer is active:
+4. Confirm it’s running:
 
    ```bash
-   sudo systemctl status lodore-permit-bot.timer
-   sudo systemctl list-timers lodore-permit-bot.timer
+   sudo systemctl status lodore-permit-bot
    ```
 
-5. View bot output in the journal:
+5. View logs:
 
    ```bash
-   journalctl -u lodore-permit-bot.service -n 50
+   tail -f /opt/River_Permit_Tracker/lodore_bot.log
+   # or: journalctl -u lodore-permit-bot -f
+   ```
+
+---
+
+### Option B: Cron
+
+Runs the bot once every 5 minutes (separate process each time). Logs also go to `lodore_bot.log` in the repo dir.
+
+1. Open root’s crontab:
+
+   ```bash
+   sudo crontab -e
+   ```
+
+2. Add:
+
+   ```cron
+   */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py
+   ```
+
+3. Save and exit. After 5 minutes, confirm:
+
+   ```bash
+   tail -20 /opt/River_Permit_Tracker/lodore_bot.log
    ```
 
 ---
@@ -172,7 +166,7 @@ This will:
 
 - `git pull` (from `main` or `master`)
 - Reinstall/upgrade Python dependencies from `requirements.txt`
-- Restart the systemd timer if you use Option B (cron will pick up new code on the next run automatically)
+- Restart the systemd service (if you use Option A) or timer (if you use the timer); cron picks up new code on the next run
 
 ### 3.2 (Optional) Automate updates with cron
 
@@ -197,10 +191,11 @@ Add:
 | Test email              | `cd /opt/River_Permit_Tracker && .venv/bin/python3 lodore_permit_bot-2.py --test-email` |
 | Run one check           | `cd /opt/River_Permit_Tracker && .venv/bin/python3 lodore_permit_bot-2.py` |
 | Pull updates            | `cd /opt/River_Permit_Tracker && ./scripts/update.sh` |
-| View cron log           | `tail -f /var/log/lodore-bot.log` |
-| View systemd runs       | `journalctl -u lodore-permit-bot.service -f` |
-| Stop timer (systemd)    | `sudo systemctl stop lodore-permit-bot.timer` |
-| Start timer (systemd)   | `sudo systemctl start lodore-permit-bot.timer` |
+| View log file           | `tail -f /opt/River_Permit_Tracker/lodore_bot.log` |
+| View systemd journal    | `journalctl -u lodore-permit-bot -f` |
+| Stop service            | `sudo systemctl stop lodore-permit-bot` |
+| Start service           | `sudo systemctl start lodore-permit-bot` |
+| Service status          | `sudo systemctl status lodore-permit-bot` |
 
 ---
 
@@ -212,8 +207,8 @@ Add:
 - **Permission denied on `update.sh`**  
   Run: `chmod +x /opt/River_Permit_Tracker/scripts/update.sh`
 
-- **Timer not firing (systemd)**  
-  Run: `sudo systemctl list-timers --all | grep lodore` and `journalctl -u lodore-permit-bot.timer -n 20`
+- **Service not running (systemd)**  
+  Run: `sudo systemctl status lodore-permit-bot` and `journalctl -u lodore-permit-bot -n 50`
 
 - **Wrong Python or path**  
   Confirm: `ls /opt/River_Permit_Tracker/.venv/bin/python3` and that crontab or the systemd service use this path.

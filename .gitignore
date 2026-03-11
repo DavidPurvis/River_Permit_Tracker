@@ -9,9 +9,11 @@ __pycache__/
 venv/
 env/
 
-# Local state / debug
+# Local state / debug / logs
 lodore_state.json
 debug_response_*.json
+lodore_bot.log
+lodore_bot.log.*
 
 # OS
 .DS_Store
