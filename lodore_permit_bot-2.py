@@ -67,7 +67,8 @@ from urllib.error import HTTPError, URLError
 # Recreation.gov permit details
 PERMIT_ID = "250014"  # Dinosaur Green And Yampa River Permits
 SEGMENT = "Gates of Lodore, Green River"
-# Division IDs for "Gates of Lodore, Green River" only (excludes Deerlodge Park / Yampa, division 1250014)
+# Division IDs for "Gates of Lodore, Green River" only (excludes Deerlodge Park / Yampa River, division 1250014)
+# Only these divisions are included; API may return keys as str or int.
 LODORE_DIVISION_IDS = {"371", "380"}
 
 # How many months ahead to check (from today)
@@ -217,44 +218,25 @@ def find_available_dates(months_ahead: int = MONTHS_AHEAD, debug: bool = False) 
     return available
 
 
+def _is_lodore_division(div_id) -> bool:
+    """True if div_id is Gates of Lodore (excludes Yampa/Deerlodge, e.g. 1250014). API may use str or int."""
+    return str(div_id).strip() in LODORE_DIVISION_IDS
+
+
 def _parse_availability(data: dict, year: int, month: int) -> list[dict]:
     """
-    Parse the API response and extract available dates for the target segment.
-
-    The recreation.gov permit availability API can return data in several
-    formats. This handles: top-level availability, payload.availability
-    (keyed by division_id), and other known variants.
+    Parse the API response for Gates of Lodore availability only.
+    Uses payload.availability filtered by LODORE_DIVISION_IDS so Yampa dates are excluded.
     """
     results = []
 
-    # Format 1: Top-level "availability" dict keyed by date
-    if "availability" in data and isinstance(data["availability"], dict):
-        # Check if it's date-keyed (format 1) or division-keyed (payload-style at top level)
-        first_key = next(iter(data["availability"]), "")
-        first_val = data["availability"].get(first_key) if first_key else None
-        if isinstance(first_val, dict) and ("remaining" in first_val or "total" in first_val):
-            # Date-keyed: keys are dates
-            for date_str, info in data["availability"].items():
-                avail = _check_date_entry(date_str, info)
-                if avail:
-                    results.append(avail)
-        else:
-            # Division-keyed: only use Gates of Lodore divisions (371, 380)
-            for div_id, div_data in data["availability"].items():
-                if div_id not in LODORE_DIVISION_IDS:
-                    continue
-                if isinstance(div_data, dict) and "date_availability" in div_data:
-                    for date_str, slots in div_data["date_availability"].items():
-                        avail = _check_slot_entry(date_str, slots, SEGMENT)
-                        if avail:
-                            results.append(avail)
-
-    # Format 2: payload.availability = dict of division_id -> { date_availability: { date -> { total, remaining } } }
+    # Only use payload.availability with division filter — Gates of Lodore only.
+    # Do NOT use top-level "availability"; it can be aggregate (Lodore + Yampa).
     if "payload" in data:
         payload = data["payload"]
         if isinstance(payload.get("availability"), dict):
             for div_id, div_data in payload["availability"].items():
-                if div_id not in LODORE_DIVISION_IDS:
+                if not _is_lodore_division(div_id):
                     continue
                 if isinstance(div_data, dict) and "date_availability" in div_data:
                     for date_str, slots in div_data["date_availability"].items():
