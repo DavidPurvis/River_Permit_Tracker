@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Lodore permit bot every 5 minutes
+Requires=lodore-permit-bot.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=1min
+Persistent=yes
+
+[Install]
+WantedBy=timers.target
