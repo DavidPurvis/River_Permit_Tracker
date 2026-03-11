@@ -43,33 +43,23 @@ python3 lodore_permit_bot-2.py               # one-time check
 
 4. **Run on a schedule** — choose one:
 
-   - **Systemd (recommended):** one long-running process that polls every N seconds. Logs to `lodore_bot.log` and journal. Survives reboots and restarts on failure:
+   - **Cronicle:** create a job that runs every 5 minutes. Each run does one check and exits. Set the job’s **Working Directory** to the repo (e.g. `/opt/River_Permit_Tracker`) so `.env` is loaded. Logs go to `lodore_bot.log` in that dir; Cronicle also shows stdout/stderr for each run.
 
-     ```bash
-     sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.service /etc/systemd/system/
-     # If the repo is not in /opt/River_Permit_Tracker, edit the service: WorkingDirectory and paths in ExecStart
-     sudo systemctl daemon-reload
-     sudo systemctl enable --now lodore-permit-bot.service
-     sudo systemctl status lodore-permit-bot   # confirm it's running
-     tail -f /opt/River_Permit_Tracker/lodore_bot.log   # or: journalctl -u lodore-permit-bot -f
-     ```
+     - **Command:** `./.venv/bin/python3 lodore_permit_bot-2.py`  
+       (or full path: `/opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py`)
+     - **Schedule:** every 5 minutes (e.g. `*/5 * * * *` or Cronicle’s “Every 5 min”).
+     - To pull code updates on a schedule, add a second Cronicle job that runs `./scripts/update.sh` daily (same working directory).
 
-   - **Cron:** run the bot every 5 minutes (each run is a separate process). Logs also written to `lodore_bot.log` in the repo dir:
+   - **Cron:** run the bot once every 5 minutes. Disable the systemd service first if you used it: `sudo systemctl stop lodore-permit-bot && sudo systemctl disable lodore-permit-bot`
 
      ```bash
      sudo crontab -e
-     # Add:
+     # Add (edit path if repo is elsewhere):
      */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py
      ```
+     Or copy from `cron.example`.
 
-   - **Systemd timer (optional):** run on a schedule instead of continuous (like cron). Use the timer *or* the service above, not both:
-
-     ```bash
-     # Edit the .service to remove --continuous and use Type=oneshot if using the timer
-     sudo cp systemd/lodore-permit-bot.service systemd/lodore-permit-bot.timer /etc/systemd/system/
-     sudo systemctl daemon-reload
-     sudo systemctl enable --now lodore-permit-bot.timer
-     ```
+   - **Systemd (continuous):** one long-running process; restarts on failure. Use cron or Cronicle *or* systemd, not both for the same bot.
 
 ### Updating the app from GitHub
 
