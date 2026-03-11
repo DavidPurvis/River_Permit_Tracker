@@ -556,18 +556,23 @@ def notify_discord(message: str):
         log.debug("Discord not configured, skipping.")
         return
 
-    payload = json.dumps({"content": message}).encode()
+    # Discord limits content to 2000 chars; requires a User-Agent or some clients get 403
+    content = message[:2000] if len(message) > 2000 else message
+    payload = json.dumps({"content": content}).encode("utf-8")
     req = Request(
         DISCORD_WEBHOOK_URL,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "LodorePermitBot/1.0",
+        },
         method="POST",
     )
     try:
         urlopen(req, timeout=10)
         log.info("Discord notification sent.")
     except Exception as e:
-        log.error(f"Discord failed: {e}")
+        log.error("Discord failed: %s", e)
 
 
 def send_notifications(message: str, new_dates: list[dict] | None = None):
