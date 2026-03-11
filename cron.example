@@ -1,0 +1,5 @@
+# Gates of Lodore Permit Bot — run every 5 minutes
+# Install: sudo crontab -e   then paste the line below (edit path if needed)
+# Uses .venv in repo dir; logs go to lodore_bot.log in the same dir
+
+*/5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py

@@ -83,71 +83,58 @@ Confirm it finishes without errors and that you get an alert if there are availa
 
 ## Phase 2: Run the bot
 
-Choose **one** of the two options below.
+Choose **one** of the options below. Use only one (Cronicle, cron, or systemd) so the bot isn’t run twice.
 
 ---
 
-### Option A: Systemd service (recommended)
+### Option A: Cronicle
 
-Long-running process that polls every 30 seconds (or set `POLL_INTERVAL_SECONDS` in `.env`). Logs to `lodore_bot.log` in the repo dir and to the journal. Restarts on failure and survives reboots.
-
-1. Copy the service file:
+1. If the systemd service is enabled, disable it:
 
    ```bash
-   sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.service /etc/systemd/system/
+   sudo systemctl stop lodore-permit-bot
+   sudo systemctl disable lodore-permit-bot
    ```
 
-2. If the repo is **not** at `/opt/River_Permit_Tracker`, edit the service:
+2. In Cronicle, create a new job:
 
-   ```bash
-   sudo nano /etc/systemd/system/lodore-permit-bot.service
-   ```
+   - **Job Title:** e.g. “Lodore Permit Check”
+   - **Working Directory:** `/opt/River_Permit_Tracker` (or your repo path). Required so `.env` is loaded.
+   - **Command:** `./.venv/bin/python3 lodore_permit_bot-2.py`  
+     Or use full paths: `/opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py`
+   - **Schedule:** every 5 minutes (e.g. “Every 5 min” or cron `*/5 * * * *`).
+   - **Run as:** a user that can read the repo and `.env` (often root or the user that owns the repo).
 
-   Update `WorkingDirectory` and the paths in `ExecStart` to match your install path.
+3. Save and enable the job. Logs: Cronicle shows stdout/stderr per run; the bot also appends to `lodore_bot.log` in the repo dir.
 
-3. Reload systemd and start the service:
-
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now lodore-permit-bot.service
-   ```
-
-4. Confirm it’s running:
-
-   ```bash
-   sudo systemctl status lodore-permit-bot
-   ```
-
-5. View logs:
-
-   ```bash
-   tail -f /opt/River_Permit_Tracker/lodore_bot.log
-   # or: journalctl -u lodore-permit-bot -f
-   ```
+4. (Optional) Add a second job to pull updates daily: same working directory, command `./scripts/update.sh`, schedule e.g. daily at 3 AM.
 
 ---
 
 ### Option B: Cron
 
-Runs the bot once every 5 minutes (separate process each time). Logs also go to `lodore_bot.log` in the repo dir.
+1. Disable the systemd service if it’s enabled (see Option A step 1).
 
-1. Open root’s crontab:
-
-   ```bash
-   sudo crontab -e
-   ```
-
-2. Add:
+2. `sudo crontab -e` and add:
 
    ```cron
    */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py
    ```
 
-3. Save and exit. After 5 minutes, confirm:
+3. After 5 minutes: `tail -20 /opt/River_Permit_Tracker/lodore_bot.log`
 
-   ```bash
-   tail -20 /opt/River_Permit_Tracker/lodore_bot.log
-   ```
+Copy the line from: `cat /opt/River_Permit_Tracker/cron.example`
+
+---
+
+### Option C: Systemd (continuous)
+
+One long-running process that polls every 5 minutes (or set `POLL_INTERVAL_SECONDS` in `.env`). Use this instead of Cronicle/cron if you prefer a single process and automatic restarts.
+
+1. `sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.service /etc/systemd/system/`
+2. Edit the service if the repo path is different.
+3. `sudo systemctl daemon-reload && sudo systemctl enable --now lodore-permit-bot.service`
+4. `tail -f /opt/River_Permit_Tracker/lodore_bot.log`
 
 ---
 
@@ -192,9 +179,8 @@ Add:
 | Run one check           | `cd /opt/River_Permit_Tracker && .venv/bin/python3 lodore_permit_bot-2.py` |
 | Pull updates            | `cd /opt/River_Permit_Tracker && ./scripts/update.sh` |
 | View log file           | `tail -f /opt/River_Permit_Tracker/lodore_bot.log` |
-| View systemd journal    | `journalctl -u lodore-permit-bot -f` |
-| Stop service            | `sudo systemctl stop lodore-permit-bot` |
-| Start service           | `sudo systemctl start lodore-permit-bot` |
+| Edit cron               | `sudo crontab -e` |
+| Disable systemd (use cron) | `sudo systemctl stop lodore-permit-bot && sudo systemctl disable lodore-permit-bot` |
 | Service status          | `sudo systemctl status lodore-permit-bot` |
 
 ---

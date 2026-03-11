@@ -1,0 +1,16 @@
+# Cronicle job for Lodore Permit Bot — run every 5 minutes
+#
+# In Cronicle, create a job with:
+#
+#   Working Directory:  /opt/River_Permit_Tracker
+#   Command:            ./.venv/bin/python3 lodore_permit_bot-2.py
+#   Schedule:           Every 5 min (or cron: */5 * * * *)
+#   Run as:             root (or user that owns the repo and .env)
+#
+# Logs: Cronicle shows stdout/stderr per run; the bot also writes to
+#       lodore_bot.log in the working directory.
+#
+# Optional second job to pull code updates daily:
+#   Working Directory:  /opt/River_Permit_Tracker
+#   Command:            ./scripts/update.sh
+#   Schedule:           Daily at 3:00 AM (or similar)
