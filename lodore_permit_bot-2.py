@@ -7,10 +7,13 @@ Monitors recreation.gov for permit cancellations on the
 
 Usage:
     # One-time check
-    python lodore_permit_bot.py
+    python lodore_permit_bot-2.py
 
-    # Run on a cron schedule (e.g., every 5 minutes)
-    */5 * * * * /usr/bin/python3 /path/to/lodore_permit_bot.py
+    # Continuous polling (runs forever, checks every POLL_INTERVAL_SECONDS; Ctrl+C to stop)
+    python lodore_permit_bot-2.py --continuous
+
+    # With cron (e.g., every 5 minutes)
+    */5 * * * * /usr/bin/python3 /path/to/lodore_permit_bot-2.py
 
 Configuration:
     Set environment variables for notifications, or use a .env file (see .env.example).
@@ -76,6 +79,9 @@ MONTHS_AHEAD = 6
 
 # State file to track previously-seen availability (avoids duplicate alerts)
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lodore_state.json")
+
+# Continuous polling: seconds between checks (env POLL_INTERVAL_SECONDS, default 5 min)
+POLL_INTERVAL_SECONDS = 30
 
 # Notification settings (set via environment variables)
 # --- Email (SMTP) ---z
@@ -585,21 +591,9 @@ def send_notifications(message: str, new_dates: list[dict] | None = None):
 # MAIN
 # ---------------------------------------------------------------------------
 
-def main():
-    debug = "--debug" in sys.argv
-
-    if debug:
-        logging.getLogger("lodore_bot").setLevel(logging.DEBUG)
-
-    log.info("=" * 60)
-    log.info("Gates of Lodore Permit Bot — Starting check")
-    log.info(f"Permit ID: {PERMIT_ID} | Segment: {SEGMENT}")
-    log.info("=" * 60)
-
-    # Load previous state
+def _run_one_check(debug: bool = False) -> None:
+    """Load state, fetch availability, notify on new dates, prune state, save. Single run."""
     state = load_state()
-
-    # Fetch current availability
     available = find_available_dates(debug=debug)
 
     if not available:
@@ -609,40 +603,61 @@ def main():
         save_state(state)
         return
 
-    log.info(f"Found {len(available)} total available date(s).")
+    log.info("Found %s total available date(s).", len(available))
     for d in available:
-        log.info(f"  Available: {d['date']} — Remaining: {d['remaining']}")
+        log.info("  Available: %s — Remaining: %s", d["date"], d["remaining"])
 
-    # Determine which dates are NEW (not previously seen)
     new_dates = get_new_dates(available, state)
 
     if new_dates:
-        log.info(f"🚨 {len(new_dates)} NEW date(s) found!")
+        log.info("🚨 %s NEW date(s) found!", len(new_dates))
         message = format_message(new_dates)
         print(message)
         send_notifications(message, new_dates=new_dates)
-
-        # Update state with newly seen dates
         state["seen_dates"] = list(
             set(state.get("seen_dates", []) + [d["date"] for d in new_dates])
         )
     else:
         log.info("No new dates since last check.")
 
-    # Prune state: drop past dates and dates that are no longer available (so we re-alert if they open again)
+    # Prune state: only drop past dates. Do NOT remove dates missing from current
+    # "available" (API flakiness would cause duplicate alerts when they reappear).
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     def _norm(s: str) -> str:
         return s.split("T")[0] if "T" in s else s
 
-    current_available = {_norm(d["date"]) for d in available}
-    state["seen_dates"] = [
-        d for d in state["seen_dates"]
-        if _norm(d) >= today and _norm(d) in current_available
-    ]
-
+    state["seen_dates"] = [d for d in state["seen_dates"] if _norm(d) >= today]
     save_state(state)
     log.info("Check complete.")
+
+
+def main():
+    debug = "--debug" in sys.argv
+    continuous = "--continuous" in sys.argv
+
+    if debug:
+        logging.getLogger("lodore_bot").setLevel(logging.DEBUG)
+
+    log.info("=" * 60)
+    log.info("Gates of Lodore Permit Bot — %s", "continuous polling" if continuous else "starting check")
+    log.info("Permit ID: %s | Segment: %s", PERMIT_ID, SEGMENT)
+    if continuous:
+        log.info("Poll interval: %s seconds (Ctrl+C to stop)", POLL_INTERVAL_SECONDS)
+    log.info("=" * 60)
+
+    if continuous:
+        while True:
+            try:
+                _run_one_check(debug=debug)
+            except KeyboardInterrupt:
+                log.info("Stopped by user (Ctrl+C).")
+                break
+            except Exception as e:
+                log.exception("Check failed: %s — will retry in %s s", e, POLL_INTERVAL_SECONDS)
+            time.sleep(POLL_INTERVAL_SECONDS)
+    else:
+        _run_one_check(debug=debug)
 
 
 def main_test_email():
