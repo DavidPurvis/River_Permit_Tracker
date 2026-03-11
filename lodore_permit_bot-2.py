@@ -629,17 +629,15 @@ def main():
     else:
         log.info("No new dates since last check.")
 
-    # Prune state: drop past dates and dates that are no longer available (so we re-alert if they open again)
+    # Prune state: only drop past dates. Do NOT remove dates that are missing from
+    # current "available" — that could be API inconsistency, pagination, or transient
+    # errors, and would cause duplicate notifications when the API returns them again.
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     def _norm(s: str) -> str:
         return s.split("T")[0] if "T" in s else s
 
-    current_available = {_norm(d["date"]) for d in available}
-    state["seen_dates"] = [
-        d for d in state["seen_dates"]
-        if _norm(d) >= today and _norm(d) in current_available
-    ]
+    state["seen_dates"] = [d for d in state["seen_dates"] if _norm(d) >= today]
 
     save_state(state)
     log.info("Check complete.")
