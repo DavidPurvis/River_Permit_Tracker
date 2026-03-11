@@ -67,9 +67,9 @@ from urllib.error import HTTPError, URLError
 # Recreation.gov permit details
 PERMIT_ID = "250014"  # Dinosaur Green And Yampa River Permits
 SEGMENT = "Gates of Lodore, Green River"
-# Division IDs for "Gates of Lodore, Green River" only (excludes Deerlodge Park / Yampa River, division 1250014)
-# Only these divisions are included; API may return keys as str or int.
-LODORE_DIVISION_IDS = {"371", "380"}
+# Division ID for "Gates of Lodore, Green River" (sparse availability: e.g. May 13–15 then nothing till November).
+# 1250014 = Lodore; 371/380 = other segment with more dates. API may return keys as str or int.
+LODORE_DIVISION_IDS = {"380"}
 
 # How many months ahead to check (from today)
 MONTHS_AHEAD = 6
@@ -624,9 +624,17 @@ def main():
     else:
         log.info("No new dates since last check.")
 
-    # Clean out old dates from state (dates that have passed)
+    # Prune state: drop past dates and dates that are no longer available (so we re-alert if they open again)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    state["seen_dates"] = [d for d in state["seen_dates"] if d >= today]
+
+    def _norm(s: str) -> str:
+        return s.split("T")[0] if "T" in s else s
+
+    current_available = {_norm(d["date"]) for d in available}
+    state["seen_dates"] = [
+        d for d in state["seen_dates"]
+        if _norm(d) >= today and _norm(d) in current_available
+    ]
 
     save_state(state)
     log.info("Check complete.")
