@@ -19,8 +19,11 @@ else
     pip3 install -r requirements.txt -q --user 2>/dev/null || pip3 install -r requirements.txt -q
 fi
 
-# Restart systemd timer if it exists (no-op if not using systemd)
-if systemctl is-enabled lodore-permit-bot.timer &>/dev/null; then
+# Restart systemd service or timer if present (no-op if not using systemd)
+if systemctl is-enabled lodore-permit-bot.service &>/dev/null; then
+    sudo systemctl restart lodore-permit-bot.service
+    echo "Restarted lodore-permit-bot.service"
+elif systemctl is-enabled lodore-permit-bot.timer &>/dev/null; then
     sudo systemctl restart lodore-permit-bot.timer
     echo "Restarted lodore-permit-bot.timer"
 fi

@@ -43,19 +43,30 @@ python3 lodore_permit_bot-2.py               # one-time check
 
 4. **Run on a schedule** — choose one:
 
-   - **Cron (simple):** run the bot every 5 minutes:
+   - **Systemd (recommended):** one long-running process that polls every N seconds. Logs to `lodore_bot.log` and journal. Survives reboots and restarts on failure:
+
+     ```bash
+     sudo cp /opt/River_Permit_Tracker/systemd/lodore-permit-bot.service /etc/systemd/system/
+     # If the repo is not in /opt/River_Permit_Tracker, edit the service: WorkingDirectory and paths in ExecStart
+     sudo systemctl daemon-reload
+     sudo systemctl enable --now lodore-permit-bot.service
+     sudo systemctl status lodore-permit-bot   # confirm it's running
+     tail -f /opt/River_Permit_Tracker/lodore_bot.log   # or: journalctl -u lodore-permit-bot -f
+     ```
+
+   - **Cron:** run the bot every 5 minutes (each run is a separate process). Logs also written to `lodore_bot.log` in the repo dir:
 
      ```bash
      sudo crontab -e
      # Add:
-     */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py >> /var/log/lodore-bot.log 2>&1
+     */5 * * * * /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py
      ```
 
-   - **Systemd timer:** use the included service + timer so you can start/stop/restart cleanly:
+   - **Systemd timer (optional):** run on a schedule instead of continuous (like cron). Use the timer *or* the service above, not both:
 
      ```bash
+     # Edit the .service to remove --continuous and use Type=oneshot if using the timer
      sudo cp systemd/lodore-permit-bot.service systemd/lodore-permit-bot.timer /etc/systemd/system/
-     # Edit the service file if your path or venv is different
      sudo systemctl daemon-reload
      sudo systemctl enable --now lodore-permit-bot.timer
      ```
@@ -84,6 +95,16 @@ sudo crontab -e
 # Add (runs at 3 AM):
 0 3 * * * /opt/River_Permit_Tracker/scripts/update.sh >> /var/log/lodore-bot-update.log 2>&1
 ```
+
+## Logging
+
+All runs write to **console** and to **`lodore_bot.log`** in the repo directory (rotating, 5 MB × 3 backups). Override with env:
+
+- `LOG_FILE=/var/log/lodore-bot.log` — log path
+- `LOG_LEVEL=DEBUG` — more verbose
+- `LOG_FILE_MAX_MB=10` — max MB per file (default 5)
+
+View logs: `tail -f /opt/River_Permit_Tracker/lodore_bot.log` (or your `LOG_FILE` path). In Cronicle, you can point the job at the repo dir and open `lodore_bot.log`, or set `LOG_FILE` to a path Cronicle can show.
 
 ## Configuration
 

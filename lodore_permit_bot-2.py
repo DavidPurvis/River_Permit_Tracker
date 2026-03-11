@@ -21,6 +21,7 @@ Configuration:
 
 import json
 import logging
+import logging.handlers
 import os
 import sys
 
@@ -81,7 +82,7 @@ MONTHS_AHEAD = 6
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lodore_state.json")
 
 # Continuous polling: seconds between checks (env POLL_INTERVAL_SECONDS, default 5 min)
-POLL_INTERVAL_SECONDS = 30
+POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "0"))
 
 # Notification settings (set via environment variables)
 # --- Email (SMTP) ---z
@@ -94,13 +95,30 @@ NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", os.getenv("NOTIFY_EMAIL"))
 # --- Discord webhook ---
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
-# Logging
+# Logging (console + optional file for Cronicle / background runs)
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_FILE = os.environ.get("LOG_FILE", os.path.join(_SCRIPT_DIR, "lodore_bot.log"))
+LOG_FILE_MAX_BYTES = int(os.environ.get("LOG_FILE_MAX_MB", "5")) * 1024 * 1024
+LOG_FILE_BACKUP_COUNT = 3
+
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 log = logging.getLogger("lodore_bot")
+# Add rotating file handler so logs persist (e.g. view in Cronicle job dir or tail the file)
+if LOG_FILE:
+    try:
+        _file_handler = logging.handlers.RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=LOG_FILE_MAX_BYTES,
+            backupCount=LOG_FILE_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        _file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logging.root.addHandler(_file_handler)
+    except OSError as e:
+        logging.root.warning("Could not open log file %s: %s", LOG_FILE, e)
 
 # Recreation.gov API details
 BASE_URL = "https://www.recreation.gov"
@@ -637,6 +655,8 @@ def main():
     continuous = "--continuous" in sys.argv
 
     if debug:
+        # Set root logger so DEBUG from lodore_bot is not filtered (it propagates to root)
+        logging.getLogger().setLevel(logging.DEBUG)
         logging.getLogger("lodore_bot").setLevel(logging.DEBUG)
 
     log.info("=" * 60)

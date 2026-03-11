@@ -1,13 +1,15 @@
 [Unit]
-Description=Gates of Lodore permit availability check (single run)
+Description=Gates of Lodore permit bot (continuous polling)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 # Edit paths below if you clone to a different directory
 WorkingDirectory=/opt/River_Permit_Tracker
-ExecStart=/bin/bash -c 'if [ -x /opt/River_Permit_Tracker/.venv/bin/python3 ]; then exec /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py; else exec /usr/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py; fi'
+ExecStart=/bin/bash -c 'if [ -x /opt/River_Permit_Tracker/.venv/bin/python3 ]; then exec /opt/River_Permit_Tracker/.venv/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py --continuous; else exec /usr/bin/python3 /opt/River_Permit_Tracker/lodore_permit_bot-2.py --continuous; fi'
+Restart=on-failure
+RestartSec=60
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=lodore-permit-bot
